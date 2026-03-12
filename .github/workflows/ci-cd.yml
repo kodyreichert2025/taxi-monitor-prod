@@ -1,0 +1,77 @@
+name: CI-CD Taxi Monitor
+
+on:
+  push:
+    branches:
+      - main
+      - "**"
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: chicago-taxi-data-486121
+  REGION: us-central1
+  SERVICE: taxi-monitor-service
+  REPOSITORY: taxi-apps
+  IMAGE: us-central1-docker.pkg.dev/chicago-taxi-data-486121/taxi-apps/taxi-monitor:${{ github.sha }}
+
+jobs:
+  ci:
+    name: Validate App and Build Container
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compile check Python
+        run: python -m py_compile main.py
+
+      - name: Build Docker image
+        run: docker build -t taxi-monitor-test .
+
+  deploy:
+    name: Deploy to Cloud Run
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
+      - name: Build image
+        run: docker build -t $IMAGE .
+
+      - name: Push image
+        run: docker push $IMAGE
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE }}
