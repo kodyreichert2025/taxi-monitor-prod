@@ -3,7 +3,7 @@ import time
 import random
 from flask import Flask, Response, jsonify
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-
+#test
 app = Flask(__name__)
 
 REQUEST_COUNT = Counter(
@@ -38,6 +38,7 @@ def home():
 
         return jsonify({
             "status": "ok",
+            "message": "Taxi monitoring service running - automatic deployment test v2",
             "prediction": 0
         })
 
